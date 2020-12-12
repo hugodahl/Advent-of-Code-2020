@@ -26,58 +26,85 @@ namespace HugoDahl.AdventOfCode.Year2020
 
 		public static int Main(string[] args)
 		{
-			var inputs = GetInput(true);
+			var inputs = GetInput();
 
       var listed = inputs.ToList();
 
-      var parsed = inputs.Select((input, rowIndex) => 
+      var parsed = inputs.Select((input, rowIndex) =>
             input.Select((key, colIndex) => FloorLocation.Parse(key, new Point(rowIndex, colIndex))
                                                          ).ToList()
                                                          )
                  .ToList();
 
       var size = GetFileContentInfo(listed);
-      var maxRounds = 10;
-
-//       for(var round = 1; round <= maxRounds; round++){
-//         parsed.ForEach(row => {
-//           row.ForEach(cell => {
-//             var contigs = cell.GetNeighbours(size.width, size.height)
-//                               .Select(n => parsed[n.X][n.Y]);
-//             cell.CalculateBusy(round, contigs);
-//           });
-//         });
-//       }
+      var maxRounds = 100;
 
 
+			Console.WriteLine($"---------------{Environment.NewLine}--- Part #1 ---{Environment.NewLine}---------------");
+			RunPartOne(parsed, maxRounds, size.width, size.height);
+			PrintOutput(parsed, maxRounds);
 
-      for(var round = 1; round <= maxRounds; round++){
-        parsed.ForEach(row => {
-          row.ForEach(cell => {
-            cell.CalculateVisibleBusy(round, size.width, size.height, parsed);
-          });
-        });
-      }
+			Reset(parsed);
 
+			Console.WriteLine($"---------------{Environment.NewLine}--- Part #2 ---{Environment.NewLine}---------------");
+			RunPartTwo(parsed, maxRounds, size.width, size.height);
+			PrintOutput(parsed, maxRounds);
+
+
+      return 0;
+		}
+
+		public static void Reset(List<List<FloorLocation>> grid){
+			grid.SelectMany(row => row.Select(cell => cell))
+					.ToList()
+					.ForEach(cell => cell.Reset());
+		}
+
+		public static void PrintOutput(List<List<FloorLocation>> grid, int maxRounds){
 
       var result = Enumerable.Range(1, maxRounds)
                              .Select(round => {
-                                        var row = parsed[0].Count(c => c.IsOccupied(round));
-                                        
+                                        var row = grid[0].Count(c => c.IsOccupied(round));
+
                                         var rowResult = new {
-                                          Round = round, 
-                                          Occupieds = parsed.Sum(row => row.Count(cell => cell.IsOccupied(round))),
+                                          Round = round,
+                                          Occupieds = grid.Sum(row => row.Count(cell => cell.IsOccupied(round))),
                                         };
 
                                         return rowResult;
                                     }
+
+
       );
 
       result.Select(res => $"Round: {res.Round};  {res.Occupieds} occupied seats")
             .ToList()
             .ForEach(Console.WriteLine);
 
-      return 0;
+		}
+
+		private static void RunPartOne(List<List<FloorLocation>> input, int maxRounds, int width, int height){
+
+       for(var round = 1; round <= maxRounds; round++){
+         input.ForEach(row => {
+												row.ForEach(cell => {
+																							var contigs = cell.GetNeighbours(width, height)
+																																.Select(n => input[n.X][n.Y]);
+																							cell.CalculateBusy(round, contigs);
+																						});
+         });
+       }
+
+		}
+
+		private static void RunPartTwo(List<List<FloorLocation>> input, int maxRounds, int width, int height){
+			for(var round = 1; round <= maxRounds; round++){
+					input.ForEach(row => {
+						row.ForEach(cell => {
+							cell.CalculateVisibleBusy(round, width, height, input);
+						});
+					});
+				}
 		}
 
     private static void PrintGrid(IEnumerable<IEnumerable<FloorLocation>> parsed, int maxRounds){
@@ -100,14 +127,14 @@ namespace HugoDahl.AdventOfCode.Year2020
         var innerValues = value.Value
                                .ToString()
                                .Select((inner, idx) => new {
-                                                              Value = inner, 
+                                                              Value = inner,
                                                               Index = idx
                                                             }
                                       )
                                .ToList();
-      
+
         innerValues.ForEach(inner => array[value.Index, inner.Index] = inner.Value);
-      
+
       });
 
     }
@@ -157,7 +184,17 @@ namespace HugoDahl.AdventOfCode.Year2020
     public bool IsFloor { get { return !this.IsSeat; }}
     public Point Position { get; private set; }
 
-    private List<bool> _rounds = new List<bool>(){false};
+    private List<bool> _rounds = new List<bool>();
+
+
+		public void Reset(){
+			this._rounds.Clear();
+			this._rounds.Add(false);
+		}
+
+		public FloorLocation(){
+			this.Reset();
+		}
 
     public bool IsOccupied(int round) {
       if (this.IsFloor){
@@ -177,26 +214,29 @@ namespace HugoDahl.AdventOfCode.Year2020
         return;
       }
 
-      var prevState = this.IsOccupied(round -1);
+      var currentlyOccupied = this.IsOccupied(round -1);
 
       var visibles = this.GetVisibleSeats(maxRows, maxColumns, seats)
                          .Select(pos => seats[pos.X][pos.Y])
                          .ToList();
 
-      var busy = visibles.Where(seat => seat.IsOccupied(round-1))
-                         .Count();
+//			if (round == 1) {
+//				Console.WriteLine($"From {this.Position}, Visible seats: {string.Join(", ", visibles)}.");
+//			}
 
-      if (!prevState){ // If we're empty
-        this._rounds.Add(busy == 0);
+      var countOccupiedVisibles = visibles.Count(seat => seat.IsOccupied(round-1));
+
+      if (!currentlyOccupied){ // If we're empty
+        this._rounds.Add(countOccupiedVisibles == 0);
         return;
       }
 
-      if (busy > 5){
+      if (countOccupiedVisibles >= 5){
         this._rounds.Add(false);
         return;
       }
 
-      this._rounds.Add(prevState);
+      this._rounds.Add(currentlyOccupied);
     }
 
     public void CalculateBusy(int round, IEnumerable<FloorLocation> neighbours){
@@ -206,8 +246,7 @@ namespace HugoDahl.AdventOfCode.Year2020
 
       var prevState = this.IsOccupied(round -1);
 
-      var busy = neighbours.Where(seat => seat.IsOccupied(round-1))
-                           .Count();
+      var busy = neighbours.Count(seat => seat.IsOccupied(round-1));
 
       if (!prevState){ // If we're empty
         this._rounds.Add(busy == 0);
@@ -248,7 +287,7 @@ namespace HugoDahl.AdventOfCode.Year2020
       }
     }
 
-    public IEnumerable<Point> GetVisibleSeats(int maxRows, int maxCols, List<List<FloorLocation>> grid){
+    public IEnumerable<Point> GetVisibleSeats(int maxCols, int maxRows, List<List<FloorLocation>> grid){
       var increments = new [] {-1, 0, 1};
 
       foreach(var x in increments){
@@ -302,7 +341,7 @@ namespace HugoDahl.AdventOfCode.Year2020
       if (round > this._rounds.Count){
         return $"<INVALID (round {round})>";
       }
-      
+
       return $"{this.GetState(round)} @ {Position}";
     }
 
